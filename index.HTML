@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calcolatore Ore Lavorative Mensili</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        /* Stili Generali e Layout */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 1rem;
+            background: linear-gradient(to right, #f0f2f5, #e0eafc);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2rem;
+            color: #333;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Pulsanti e input file */
+        .buttons {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .buttons button, .buttons label {
+            background-color: #007bff;
+            color: #fff;
+            padding: 0.7rem 1.2rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            text-transform: uppercase;
+        }
+
+        .buttons button:hover, .buttons label:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+        
+        .buttons input[type="file"] {
+            display: none;
+        }
+
+        /* Stili della Tabella principale */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 2rem;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        thead th {
+            font-weight: bold;
+            color: white;
+            white-space: nowrap;
+        }
+        
+        /* Colori per le intestazioni della tabella principale */
+        th:nth-child(1) { background-color: #007bff; }
+        th:nth-child(2) { background-color: #28a745; }
+        th:nth-child(3) { background-color: #dc3545; }
+        th:nth-child(4) { background-color: #6f42c1; }
+        th:nth-child(5) { background-color: #fd7e14; }
+        th:nth-child(6) { background-color: #ff5733; }
+        th:nth-child(7) { background-color: #6c757d; }
+        th:nth-child(8) { background-color: #00bfff; }
+        th:nth-child(9) { background-color: #17a2b8; }
+        th:nth-child(10) { background-color: #ffc107; }
+
+        /* Stili input e celle di calcolo */
+        input[type="date"], input[type="time"] {
+            border: none;
+            background: transparent;
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .calculated-cell {
+            font-weight: bold;
+            color: white;
+        }
+
+        .ordinaria { background-color: #6f42c1; }
+        .straordinaria { background-color: #fd7e14; }
+        .premio-aggiuntivo { background-color: #ff5733; }
+        .notturna { background-color: #6c757d; }
+        .ferie { background-color: #00bfff; }
+        .domenica { background-color: #17a2b8; }
+        .festivita { background-color: #ffc107; }
+
+        tfoot td {
+            font-weight: bold;
+            background-color: #f8f9fa;
+            color: #000;
+        }
+
+        /* Stili per la tabella stipendio */
+        #salary-table {
+            width: 100%;
+            max-width: 600px;
+            margin: 2rem auto;
+            border-collapse: collapse;
+            background-color: #fff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #salary-table thead th {
+            background-color: #4CAF50;
+        }
+        #salary-table tbody tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        #salary-table tfoot td {
+            background-color: #333;
+            color: white;
+        }
+        .salary-value {
+            font-weight: bold;
+            text-align: right;
+        }
+
+        /* Stili per il footer */
+        footer {
+            text-align: center;
+            margin-top: 2rem;
+            font-size: 0.9rem;
+            color: #555;
+        }
+
+        /* Stili Responsive */
+        @media (max-width: 600px) {
+            h1 { font-size: 1.5rem; }
+            .buttons { flex-direction: column; align-items: stretch; }
+            th, td { font-size: 0.8rem; padding: 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <h1>🗓️ Calcolatore Ore Lavorative Mensili</h1>
+
+    <div class="buttons">
+        <button id="saveButton">💾 Salva JSON</button>
+        <label for="loadInput">📂 Carica JSON</label>
+        <input type="file" id="loadInput" accept=".json" />
+        <button id="exportExcel">📊 Esporta Excel</button>
+        <button id="resetButton">🔄 Reset Dati</button>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>📅 Data</th>
+                    <th>⏰ Inizio</th>
+                    <th>⏰ Fine</th>
+                    <th>⌛ Ordinaria</th>
+                    <th>⚡ Straordinaria</th>
+                    <th>💰 Premio Agg. (22:00-02:30)</th>
+                    <th>🌙 Notturna (02:30-04:00)</th>
+                    <th>🏖️ Ferie</th>
+                    <th>🗓️ Domenica</th>
+                    <th>🎉 Festività</th>
+                </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3">Totale Ore</td>
+                    <td id="total-ordinary">00:00</td>
+                    <td id="total-overtime">00:00</td>
+                    <td id="total-premio">00:00</td>
+                    <td id="total-night">00:00</td>
+                    <td id="total-ferie">00:00</td>
+                    <td id="total-domenica">00:00</td>
+                    <td id="total-festivita">00:00</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <hr>
+    
+    <h2>💶 Riepilogo Stipendio Lordo</h2>
+    <div>
+        <label for="level-selector">Seleziona Livello: </label>
+        <select id="level-selector">
+            <option value="a1s">A1S</option>
+            <option value="a1">A1</option>
+            <option value="a2">A2</option>
+            <option value="a3">A3</option>
+            <option value="a4" selected>A4</option>
+            <option value="apprendista">Apprendista</option>
+        </select>
+    </div>
+    <div class="table-container">
+        <table id="salary-table">
+            <thead>
+                <tr>
+                    <th>Voce</th>
+                    <th>Totale Ore</th>
+                    <th>Tariffa Oraria</th>
+                    <th>Importo Totale</th>
+                </tr>
+            </thead>
+            <tbody id="salary-tbody">
+                <tr><td>Ore Ordinarie</td><td id="salary-ordinary-hours">00:00</td><td id="salary-ordinary-rate" class="salary-value">0.00 €</td><td id="salary-ordinary-amount" class="salary-value">0.00 €</td></tr>
+                <tr><td>Ore Straordinarie</td><td id="salary-overtime-hours">00:00</td><td id="salary-overtime-rate" class="salary-value">0.00 €</td><td id="salary-overtime-amount" class="salary-value">0.00 €</td></tr>
+                <tr><td>Ore Notturne</td><td id="salary-night-hours">00:00</td><td id="salary-night-rate" class="salary-value">0.00 €</td><td id="salary-night-amount" class="salary-value">0.00 €</td></tr>
+                <tr><td>Premio Agg.</td><td id="salary-premio-hours">00:00</td><td id="salary-premio-rate" class="salary-value">0.00 €</td><td id="salary-premio-amount" class="salary-value">0.00 €</td></tr>
+                <tr><td>Festività</td><td id="salary-festivita-hours">00:00</td><td id="salary-festivita-rate" class="salary-value">0.00 €</td><td id="salary-festivita-amount" class="salary-value">0.00 €</td></tr>
+                <tr><td>Domenica</td><td id="salary-domenica-hours">00:00</td><td id="salary-domenica-rate" class="salary-value">0.00 €</td><td id="salary-domenica-amount" class="salary-value">0.00 €</td></tr>
+                <tr><td>Ferie</td><td id="salary-ferie-hours">00:00</td><td id="salary-ferie-rate" class="salary-value">0.00 €</td><td id="salary-ferie-amount" class="salary-value">0.00 €</td></tr>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3">Stipendio Lordo Totale</td>
+                    <td id="salary-total-amount" class="salary-value">0.00 €</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    
+    <hr>
+
+    <footer>© by Stefano Alf - 2025</footer>
+
+    <script>
+        // ===================================
+        // 🛠️ VARIABILI E COSTANTI
+        // ===================================
+        const tbody = document.getElementById("tbody");
+        const levelSelector = document.getElementById("level-selector");
+        const ORDINARY_LIMIT_MINUTES = 8 * 60; // 8 ore in minuti
+        const LOCAL_STORAGE_KEY = 'monthlyHoursData';
+        const LOCAL_STORAGE_LEVEL_KEY = 'selectedLevel';
+        
+        // Fasce orarie speciali in minuti
+        const SPECIAL_HOURS = {
+            premio: { start: 22 * 60, end: 2 * 60 + 30 }, // 22:00 -> 02:30
+            notturna: { start: 2 * 60 + 30, end: 4 * 60 } // 02:30 -> 04:00
+        };
+
+        // Tariffe orarie basate sul CCNL Panificatori
+        const LEVEL_RATES = {
+            a1s: {
+                ordinarie: 11.2734,
+                straordinarie: 17.7554,
+                notturne: 16.9101,
+                premio_aggiuntivo: 5.6367,
+                festivita: 19.7284,
+                domenica: 19.7284,
+                ferie: 11.2734
+            },
+            a1: {
+                ordinarie: 10.92133,
+                straordinarie: 17.19773,
+                notturne: 16.381995,
+                premio_aggiuntivo: 5.460665,
+                festivita: 19.11233,
+                domenica: 19.11233,
+                ferie: 10.92133
+            },
+            a2: {
+                ordinarie: 10.21783,
+                straordinarie: 16.0959,
+                notturne: 15.3267,
+                premio_aggiuntivo: 5.1089,
+                festivita: 17.8812,
+                domenica: 17.8812,
+                ferie: 10.21783
+            },
+            a3: {
+                ordinarie: 9.51433,
+                straordinarie: 14.99407,
+                notturne: 14.2715,
+                premio_aggiuntivo: 4.7571,
+                festivita: 16.6496,
+                domenica: 16.6496,
+                ferie: 9.51433
+            },
+            a4: {
+                ordinarie: 8.81083,
+                straordinarie: 13.89223,
+                notturne: 13.2163,
+                premio_aggiuntivo: 4.4054,
+                festivita: 15.418,
+                domenica: 15.418,
+                ferie: 8.81083
+            },
+            apprendista: {
+                ordinarie: 8.024,
+                straordinarie: 12.6378,
+                notturne: 12.036,
+                premio_aggiuntivo: 4.012,
+                festivita: 14.042,
+                domenica: 14.042,
+                ferie: 8.024
+            }
+        };
+
+
+        // ===================================
+        // 🚀 FUNZIONI DI UTILITÀ
+        // ===================================
+
+        /**
+         * Converte i minuti totali nel formato "HH:MM".
+         * @param {number} totalMinutes
+         * @returns {string}
+         */
+        function formatMinutesToTime(totalMinutes) {
+            if (totalMinutes < 0) totalMinutes = 0;
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+        }
+
+        /**
+         * Converte una stringa di tempo "HH:MM" in minuti.
+         * @param {string} timeString
+         * @returns {number}
+         */
+        function timeToMinutes(timeString) {
+            if (!timeString) return 0;
+            const [hours, minutes] = timeString.split(":").map(Number);
+            return hours * 60 + minutes;
+        }
+
+        // ===================================
+        // 💾 FUNZIONI DI SALVATAGGIO AUTOMATICO
+        // ===================================
+        function saveDataAutomatically() {
+            const data = [...tbody.children].map(row => {
+                const inputs = row.querySelectorAll("input");
+                return {
+                    date: inputs[0].value,
+                    start: inputs[1].value,
+                    end: inputs[2].value,
+                    ferie: inputs[3].checked,
+                    domenica: inputs[4].checked,
+                    festivita: inputs[5].checked
+                };
+            });
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+            localStorage.setItem(LOCAL_STORAGE_LEVEL_KEY, levelSelector.value);
+        }
+
+        // ===================================
+        // 📊 LOGICA DI CALCOLO
+        // ===================================
+
+        /**
+         * Calcola le ore totali, ordinarie, straordinarie e speciali per una singola riga.
+         * @param {HTMLTableRowElement} row
+         */
+        function calculateRowHours(row) {
+            const [dateInput, startInput, endInput, ferieInput, domenicaInput, festivitaInput] = row.querySelectorAll("input");
+            const startTime = timeToMinutes(startInput.value);
+            const endTime = timeToMinutes(endInput.value);
+            
+            let totalMinutes = 0;
+            let ordinaryMinutes = 0;
+            let overtimeMinutes = 0;
+            let premioMinutes = 0;
+            let notturnaMinutes = 0;
+
+            if (startInput.value && endInput.value) {
+                let endAdjusted = endTime < startTime ? endTime + 1440 : endTime;
+                totalMinutes = endAdjusted - startTime;
+
+                if (ferieInput.checked || domenicaInput.checked || festivitaInput.checked) {
+                    ordinaryMinutes = 0;
+                    overtimeMinutes = 0;
+                    premioMinutes = 0;
+                    notturnaMinutes = 0;
+                } else {
+                    for (let minute = startTime; minute < endAdjusted; minute++) {
+                        const currentMinuteOfDay = minute % 1440;
+                        
+                        const premioStart = SPECIAL_HOURS.premio.start;
+                        const premioEnd = SPECIAL_HOURS.premio.end;
+                        if ((currentMinuteOfDay >= premioStart && currentMinuteOfDay < 1440) || 
+                            (currentMinuteOfDay >= 0 && currentMinuteOfDay < premioEnd)) {
+                            premioMinutes++;
+                        }
+
+                        const notturnaStart = SPECIAL_HOURS.notturna.start;
+                        const notturnaEnd = SPECIAL_HOURS.notturna.end;
+                        if (currentMinuteOfDay >= notturnaStart && currentMinuteOfDay < notturnaEnd) {
+                            notturnaMinutes++;
+                        }
+                    }
+                    
+                    overtimeMinutes = Math.max(0, totalMinutes - ORDINARY_LIMIT_MINUTES);
+                    const minutesWithinLimit = Math.min(totalMinutes, ORDINARY_LIMIT_MINUTES);
+                    ordinaryMinutes = Math.max(0, minutesWithinLimit - notturnaMinutes);
+                }
+            }
+
+            row.querySelector(".ordinaria").textContent = formatMinutesToTime(ordinaryMinutes);
+            row.querySelector(".straordinaria").textContent = formatMinutesToTime(overtimeMinutes);
+            row.querySelector(".premio-aggiuntivo").textContent = formatMinutesToTime(premioMinutes);
+            row.querySelector(".notturna").textContent = formatMinutesToTime(notturnaMinutes);
+
+            updateAllTotals();
+            saveDataAutomatically();
+        }
+
+        /**
+         * Aggiorna i totali nel footer della tabella principale e calcola lo stipendio.
+         */
+        function updateAllTotals() {
+            let totalOrdinary = 0, totalOvertime = 0, totalPremio = 0, totalNight = 0, totalFerie = 0, totalDomenica = 0, totalFestivita = 0;
+
+            for (const row of tbody.children) {
+                const inputs = row.querySelectorAll("input");
+                const isFerie = inputs[3]?.checked || false;
+                const isDomenica = inputs[4]?.checked || false;
+                const isFestivita = inputs[5]?.checked || false;
+
+                const startInput = inputs[1];
+                const endInput = inputs[2];
+                const startTime = timeToMinutes(startInput.value);
+                const endTime = timeToMinutes(endInput.value);
+                let totalMinutes = 0;
+                if (startInput.value && endInput.value) {
+                     let endAdjusted = endTime < startTime ? endTime + 1440 : endTime;
+                     totalMinutes = endAdjusted - startTime;
+                }
+
+                if (isFerie) {
+                    totalFerie += totalMinutes;
+                } else if (isDomenica) {
+                    totalDomenica += totalMinutes;
+                } else if (isFestivita) {
+                    totalFestivita += totalMinutes;
+                } else {
+                    const ordinaryRowMinutes = timeToMinutes(row.querySelector('.ordinaria').textContent);
+                    const overtimeRowMinutes = timeToMinutes(row.querySelector('.straordinaria').textContent);
+                    const premioRowMinutes = timeToMinutes(row.querySelector('.premio-aggiuntivo').textContent);
+                    const nightRowMinutes = timeToMinutes(row.querySelector('.notturna').textContent);
+
+                    totalOrdinary += ordinaryRowMinutes;
+                    totalOvertime += overtimeRowMinutes;
+                    totalPremio += premioRowMinutes;
+                    totalNight += nightRowMinutes;
+                }
+            }
+
+            document.getElementById('total-ordinary').textContent = formatMinutesToTime(totalOrdinary);
+            document.getElementById('total-overtime').textContent = formatMinutesToTime(totalOvertime);
+            document.getElementById('total-premio').textContent = formatMinutesToTime(totalPremio);
+            document.getElementById('total-night').textContent = formatMinutesToTime(totalNight);
+            document.getElementById('total-ferie').textContent = formatMinutesToTime(totalFerie);
+            document.getElementById('total-domenica').textContent = formatMinutesToTime(totalDomenica);
+            document.getElementById('total-festivita').textContent = formatMinutesToTime(totalFestivita);
+
+            // Chiama la nuova funzione di calcolo stipendio
+            calculateSalary({
+                totalOrdinary,
+                totalOvertime,
+                totalPremio,
+                totalNight,
+                totalFerie,
+                totalDomenica,
+                totalFestivita
+            });
+        }
+
+        /**
+         * Calcola lo stipendio lordo basandosi sui totali delle ore e sulle tariffe orarie.
+         * @param {object} totals
+         */
+        function calculateSalary(totals) {
+            const getDecimalHours = (minutes) => minutes / 60;
+            const formatCurrency = (amount) => `${amount.toFixed(2)} €`;
+
+            const selectedLevel = levelSelector.value;
+            const rates = LEVEL_RATES[selectedLevel];
+
+            let totalSalary = 0;
+
+            const updateSalaryRow = (id, minutes, rate) => {
+                const hours = getDecimalHours(minutes);
+                const amount = hours * rate;
+                document.getElementById(`salary-${id}-hours`).textContent = formatMinutesToTime(minutes);
+                document.getElementById(`salary-${id}-rate`).textContent = formatCurrency(rate);
+                document.getElementById(`salary-${id}-amount`).textContent = formatCurrency(amount);
+                return amount;
+            };
+
+            totalSalary += updateSalaryRow('ordinary', totals.totalOrdinary, rates.ordinarie);
+            totalSalary += updateSalaryRow('overtime', totals.totalOvertime, rates.straordinarie);
+            totalSalary += updateSalaryRow('night', totals.totalNight, rates.notturne);
+            totalSalary += updateSalaryRow('premio', totals.totalPremio, rates.premio_aggiuntivo);
+            totalSalary += updateSalaryRow('festivita', totals.totalFestivita, rates.festivita);
+            totalSalary += updateSalaryRow('domenica', totals.totalDomenica, rates.domenica);
+            totalSalary += updateSalaryRow('ferie', totals.totalFerie, rates.ferie);
+            
+            document.getElementById('salary-total-amount').textContent = formatCurrency(totalSalary);
+        }
+
+        // ===================================
+        // ⚙️ GENERAZIONE E LOGICA TABELLA
+        // ===================================
+
+        /**
+         * Crea una singola riga della tabella.
+         * @param {number} dayIndex - Indice del giorno (da 0 a 30)
+         * @returns {HTMLTableRowElement}
+         */
+        function createTableRow(dayIndex) {
+            const today = new Date();
+            const day = new Date(today.getFullYear(), today.getMonth(), dayIndex + 1);
+            const isDisabled = day.getMonth() !== today.getMonth();
+            const dateString = isDisabled ? "" : day.toISOString().split('T')[0];
+
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td><input type="date" value="${dateString}" ${isDisabled ? "disabled" : ""} /></td>
+                <td><input type="time" /></td>
+                <td><input type="time" /></td>
+                <td class="calculated-cell ordinaria">00:00</td>
+                <td class="calculated-cell straordinaria">00:00</td>
+                <td class="calculated-cell premio-aggiuntivo">00:00</td>
+                <td class="calculated-cell notturna">00:00</td>
+                <td><input type="checkbox" class="ferie-checkbox" /></td>
+                <td><input type="checkbox" class="domenica-checkbox" /></td>
+                <td><input type="checkbox" class="festivita-checkbox" /></td>
+            `;
+
+            row.querySelectorAll("input").forEach(input =>
+                input.addEventListener("change", () => {
+                    if (input.type === 'date' && input.value && !input.disabled) {
+                        fillConsecutiveDates(row);
+                    }
+                    calculateRowHours(row);
+                })
+            );
+            
+            // Aggiungi un listener per il salvataggio automatico
+            row.addEventListener("input", saveDataAutomatically);
+
+            return row;
+        }
+
+        /**
+         * Riempie automaticamente le date consecutive a partire da una riga.
+         * @param {HTMLTableRowElement} startingRow
+         */
+        function fillConsecutiveDates(startingRow) {
+            const startIndex = Array.from(tbody.children).indexOf(startingRow);
+            const initialDateValue = startingRow.querySelector("input[type='date']").value;
+            const initialDate = new Date(initialDateValue);
+            
+            if (isNaN(initialDate.getTime())) return;
+
+            for (let i = 1; i < 31 - startIndex; i++) {
+                const nextRow = tbody.children[startIndex + i];
+                if (!nextRow) break;
+                
+                const nextDateInput = nextRow.querySelector("input[type='date']");
+                if (nextDateInput && !nextDateInput.disabled) {
+                    const newDate = new Date(initialDate);
+                    newDate.setDate(initialDate.getDate() + i);
+
+                    if (newDate.getMonth() === initialDate.getMonth()) {
+                        nextDateInput.value = newDate.toISOString().split('T')[0];
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        /**
+         * Popola la tabella con 31 righe.
+         */
+        function initializeTable() {
+            tbody.innerHTML = "";
+            const savedData = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY));
+            const savedLevel = localStorage.getItem(LOCAL_STORAGE_LEVEL_KEY);
+            
+            // Imposta il livello salvato o il default 'a4'
+            if (savedLevel && LEVEL_RATES[savedLevel]) {
+                levelSelector.value = savedLevel;
+            } else {
+                levelSelector.value = 'a4';
+            }
+
+            for (let i = 0; i < 31; i++) {
+                const row = createTableRow(i);
+                tbody.appendChild(row);
+                
+                // Popola la riga con i dati salvati, se disponibili
+                if (savedData && savedData[i]) {
+                    const inputs = row.querySelectorAll("input");
+                    inputs[0].value = savedData[i].date || "";
+                    inputs[1].value = savedData[i].start || "";
+                    inputs[2].value = savedData[i].end || "";
+                    inputs[3].checked = savedData[i].ferie || false;
+                    inputs[4].checked = savedData[i].domenica || false;
+                    inputs[5].checked = savedData[i].festivita || false;
+                }
+            }
+            // Ricalcola tutti i totali dopo il caricamento
+            updateAllTotals();
+        }
+        
+        // ===================================
+        // 📥 GESTIONE DEI PULSANTI
+        // ===================================
+
+        // 💾 Salva JSON
+        document.getElementById("saveButton").addEventListener("click", () => {
+            const data = [...tbody.children].map(row => {
+                const inputs = row.querySelectorAll("input");
+                return {
+                    date: inputs[0].value,
+                    start: inputs[1].value,
+                    end: inputs[2].value,
+                    ferie: inputs[3].checked,
+                    domenica: inputs[4].checked,
+                    festivita: inputs[5].checked
+                };
+            });
+            const jsonString = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonString], { type: "application/json" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = `ore_lavorative_mensili_livello_${levelSelector.value}.json`;
+            a.click();
+        });
+
+        // 📂 Carica JSON
+        document.getElementById("loadInput").addEventListener("change", (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    loadedData.forEach((item, index) => {
+                        const row = tbody.children[index];
+                        if (!row) return;
+
+                        const inputs = row.querySelectorAll("input");
+                        inputs[0].value = item.date || "";
+                        inputs[1].value = item.start || "";
+                        inputs[2].value = item.end || "";
+                        inputs[3].checked = item.ferie || false;
+                        inputs[4].checked = item.domenica || false;
+                        inputs[5].checked = item.festivita || false;
+                        
+                        calculateRowHours(row);
+                    });
+                    // Salva i dati caricati in locale per la persistenza
+                    saveDataAutomatically();
+                } catch {
+                    alert("❌ Errore nel caricamento del file. Assicurati che sia un file JSON valido.");
+                }
+            };
+            reader.readAsText(file);
+        });
+
+        // 📊 Esporta Excel
+        document.getElementById("exportExcel").addEventListener("click", () => {
+            const rows = [...tbody.children].filter(row => row.querySelector("input[type='date']").value);
+            if (!rows.length) {
+                alert("Nessuna voce da esportare.");
+                return;
+            }
+
+            const header = ["Data", "Inizio", "Fine", "Ordinaria", "Straordinaria", "Premio Agg. (22:00-02:30)", "Notturna (02:30-04:00)", "Ferie", "Domenica", "Festività"];
+            const data = rows.map(row => {
+                const inputs = row.querySelectorAll("input");
+                return [
+                    inputs[0].value,
+                    inputs[1].value,
+                    inputs[2].value,
+                    row.querySelector(".ordinaria").textContent,
+                    row.querySelector(".straordinaria").textContent,
+                    row.querySelector(".premio-aggiuntivo").textContent,
+                    row.querySelector(".notturna").textContent,
+                    inputs[3].checked ? "Sì" : "No",
+                    inputs[4].checked ? "Sì" : "No",
+                    inputs[5].checked ? "Sì" : "No"
+                ];
+            });
+
+            const worksheet = [header, ...data];
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.aoa_to_sheet(worksheet);
+            XLSX.utils.book_append_sheet(wb, ws, "Ore Mensili");
+            XLSX.writeFile(wb, `ore_lavorative_mensili_livello_${levelSelector.value}.xlsx`);
+        });
+
+        // 🔄 Reset Dati
+        document.getElementById("resetButton").addEventListener("click", () => {
+            if (!confirm("Sei sicuro di voler resettare tutti i dati?")) return;
+            
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
+            localStorage.removeItem(LOCAL_STORAGE_LEVEL_KEY);
+            initializeTable();
+        });
+
+        // ===================================
+        // 🏁 AVVIO
+        // ===================================
+        document.addEventListener("DOMContentLoaded", initializeTable);
+        
+        // Aggiungi un listener al selettore di livello
+        levelSelector.addEventListener("change", () => {
+            updateAllTotals();
+            saveDataAutomatically();
+        });
+
+    </script>
+</body>
+</html>
